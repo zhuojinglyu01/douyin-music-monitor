@@ -16,6 +16,16 @@ const CFG = path.join(HOME, "config.json");
 const RISING = path.join(HOME, "data", "rising_list.json");
 const LOGFILE = path.join(HOME, "data", "monitor.out");
 
+// 全局崩溃日志：别让任何异常静默掀翻 App，落地到 data/app-error.log
+const logErr = (tag, e) => {
+  try {
+    fs.mkdirSync(path.join(HOME, "data"), { recursive: true });
+    fs.appendFileSync(path.join(HOME, "data", "app-error.log"), `\n[${new Date().toISOString()}] ${tag}: ${e?.stack || e}\n`);
+  } catch {}
+};
+process.on("uncaughtException", (e) => logErr("uncaughtException", e));
+process.on("unhandledRejection", (e) => logErr("unhandledRejection", e));
+
 function ensureHome() {
   fs.mkdirSync(path.join(HOME, "data"), { recursive: true });
   if (!fs.existsSync(CFG)) {
@@ -93,10 +103,49 @@ ipcMain.handle("get-status", () => {
 });
 ipcMain.handle("start", () => startMonitor());
 ipcMain.handle("stop", () => stopMonitor());
-ipcMain.handle("login", () => {
-  const p = spawn(process.execPath, [path.join(ENGINE, "login.js")], { cwd: ENGINE, env: runEnv(), detached: true, stdio: "ignore" });
-  p.unref();
-  return { ok: true };
+// 治本：登录在 App 自己的窗口里做（Electron 本身就是 Chromium，不外挂 Chrome，不会崩）。
+// 登录成功后抓下抖音 cookie，写 data/douyin-login.json，引擎启动时注入到抓取上下文。
+const CHROME_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+ipcMain.handle("login", async () => {
+  return new Promise((resolve) => {
+    let win;
+    try {
+      win = new BrowserWindow({
+        width: 1100, height: 820, title: "登录抖音小号（扫码或验证码）",
+        webPreferences: { partition: "persist:douyin-login" },
+      });
+    } catch (e) { logErr("login-window", e); return resolve({ ok: false, error: e.message }); }
+    const ses = win.webContents.session;
+    ses.setUserAgent(CHROME_UA);
+    win.loadURL("https://www.douyin.com/");
+
+    let done = false;
+    const timer = setInterval(async () => {
+      if (done || win.isDestroyed()) return;
+      try {
+        const cookies = await ses.cookies.get({ domain: "douyin.com" });
+        if (cookies.some((c) => /^sessionid(_ss)?$/i.test(c.name) && c.value)) {
+          done = true; clearInterval(timer);
+          const all = await ses.cookies.get({});
+          const dy = all.filter((c) => /douyin/.test(c.domain));
+          const ss = { no_restriction: "None", lax: "Lax", strict: "Strict", unspecified: "Lax" };
+          const pw = dy.map((c) => ({
+            name: c.name, value: c.value,
+            domain: c.domain.startsWith(".") ? c.domain : "." + c.domain,
+            path: c.path || "/",
+            expires: c.expirationDate ? Math.floor(c.expirationDate) : -1,
+            httpOnly: !!c.httpOnly, secure: !!c.secure, sameSite: ss[c.sameSite] || "Lax",
+          }));
+          fs.mkdirSync(path.join(HOME, "data"), { recursive: true });
+          fs.writeFileSync(path.join(HOME, "data", "douyin-login.json"), JSON.stringify(pw, null, 2));
+          if (!win.isDestroyed()) win.close();
+          resolve({ ok: true, count: pw.length });
+        }
+      } catch (e) { logErr("login-capture", e); }
+    }, 2000);
+    win.on("closed", () => { clearInterval(timer); if (!done) resolve({ ok: false, cancelled: true }); });
+  });
 });
 
 app.whenReady().then(() => { ensureHome(); createWindow(); });

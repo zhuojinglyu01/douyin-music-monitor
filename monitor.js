@@ -11,8 +11,11 @@ import {
 } from "./lib/store.js";
 import { push } from "./lib/push.js";
 import { CONFIG as CFG, PROFILE as USER_DATA, RISING, DATA_DIR } from "./lib/paths.js";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rename } from "node:fs/promises";
+import { existsSync } from "node:fs";
 await mkdir(DATA_DIR, { recursive: true }).catch(() => {}); // 确保可写数据目录存在
+
+const LOGIN_SEED = `${DATA_DIR}/douyin-login.json`; // App 登录窗口抓到的 cookie
 
 const ONCE = process.argv.includes("--once");
 
@@ -308,6 +311,18 @@ async function main() {
   } catch (e) {
     console.error("❌ 起浏览器/读登录态失败。先跑 `npm run login` 登录小号。", e.message);
     process.exit(1);
+  }
+
+  // 一次性注入 App 登录窗口抓到的 cookie，让持久化上下文获得登录态
+  try {
+    if (existsSync(LOGIN_SEED)) {
+      const cookies = JSON.parse(await readFile(LOGIN_SEED, "utf8"));
+      await context.addCookies(cookies);
+      await rename(LOGIN_SEED, LOGIN_SEED + ".used");
+      console.log(`✅ 已注入 App 登录 cookie ${cookies.length} 条`);
+    }
+  } catch (e) {
+    console.error("注入登录 cookie 失败:", e.message);
   }
 
   do {
