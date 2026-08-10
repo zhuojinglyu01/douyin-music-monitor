@@ -1,0 +1,15 @@
+{
+  "name": "douyin-music-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "盯抖音音乐人主页，抓新歌预告点赞飙升并推送",
+  "scripts": {
+    "login": "node login.js",
+    "monitor": "node monitor.js",
+    "once": "node monitor.js --once"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}

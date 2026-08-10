@@ -1,0 +1,16 @@
+# 隐私 / 本地状态：绝不提交
+# config.json 含 Server酱 key（分享用 config.default.json）；data/ 是登录态与快照
+config.json
+data/
+logs/
+launchd-disabled/
+
+# 依赖 / 构建产物
+node_modules/
+electron-app/node_modules/
+electron-app/dist/
+dist/
+
+# 杂项
+*.log
+.DS_Store

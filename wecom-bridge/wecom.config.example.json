@@ -1,0 +1,11 @@
+{
+  "//": "把这个文件复制成 wecom.config.json 再填。值都从企业微信后台拿。",
+  "corpid": "企业ID（我的企业→企业信息→企业ID）",
+  "corpsecret": "自建应用的 Secret（应用管理→你的应用→Secret）",
+  "agentid": "自建应用的 AgentId（同上页面，是个数字）",
+  "token": "接收消息里你自己填的 Token（可随便设，两边一致）",
+  "aesKey": "接收消息里生成的 EncodingAESKey（43 位）",
+  "port": 8787,
+  "//allowUser": "可选：只允许这个企微成员发指令（成员的 UserID）。留空=不限。",
+  "allowUser": ""
+}

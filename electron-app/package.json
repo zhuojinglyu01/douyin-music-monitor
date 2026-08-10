@@ -1,0 +1,48 @@
+{
+  "name": "douyin-music-monitor-app",
+  "version": "0.1.0",
+  "description": "抖音音乐飙升监控 · 桌面版",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.ivy.douyin-music-monitor",
+    "productName": "抖音音乐飙升监控",
+    "asar": true,
+    "files": ["main.js", "preload.js", "index.html", "renderer.js", "!dist"],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "engine",
+        "filter": [
+          "*.js",
+          "lib/**/*",
+          "package.json",
+          "config.default.json",
+          "node_modules/**/*",
+          "!config.json",
+          "!electron-app${/*}",
+          "!data${/*}",
+          "!launchd-disabled${/*}",
+          "!logs${/*}",
+          "!.git${/*}"
+        ]
+      }
+    ],
+    "mac": {
+      "target": "dir",
+      "identity": null
+    },
+    "win": {
+      "target": "dir",
+      "signAndEditExecutable": false
+    },
+    "directories": { "output": "dist" }
+  }
+}

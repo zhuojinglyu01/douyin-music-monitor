@@ -1,0 +1,49 @@
+{
+  "//": "======= 分享版默认配置：不含任何私密信息 =======",
+
+  "pollIntervalMinutes": 90,
+  "headless": false,
+
+  "artists": [],
+  "//artists": "话题监控为主，名单可留空。",
+
+  "hashtags": [
+    "新歌",
+    "新歌上线",
+    "新歌首发",
+    "新歌推荐",
+    "原创音乐",
+    "原创歌曲",
+    "原创歌手",
+    "独立音乐",
+    "华语新歌",
+    "唱作人"
+  ],
+
+  "hashtagSurge": {
+    "recentDays": 7,
+    "watchlistMax": 100,
+    "tiers": {
+      "risingGain24h": 500,
+      "risingAccelX": 1.5,
+      "alertGain24h": 2000,
+      "alertAccelX": 3,
+      "breakingGain24h": 5000
+    }
+  },
+
+  "surge": {
+    "minLikesPerHour": 500,
+    "minPctGrowth": 30,
+    "newVideoWindowHours": 48,
+    "teaserKeywords": ["新歌", "预告", "首发", "上线", "新单", "demo", "新专", "预售", "先行", "抢先听", "试听"]
+  },
+
+  "push": {
+    "type": "none",
+    "//type": "填了 Server酱 SendKey 后 App 会自动切到 serverchan。",
+    "serverchan": { "sendkey": "" },
+    "wecombot": { "webhook": "" },
+    "pushdeer": { "pushkey": "" }
+  }
+}
