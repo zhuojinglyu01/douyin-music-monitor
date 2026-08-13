@@ -14,6 +14,7 @@
   "build": {
     "appId": "com.ivy.douyin-music-monitor",
     "productName": "抖音音乐飙升监控",
+    "afterPack": "./afterPack.js",
     "asar": true,
     "files": ["main.js", "preload.js", "index.html", "renderer.js", "!dist"],
     "extraResources": [
