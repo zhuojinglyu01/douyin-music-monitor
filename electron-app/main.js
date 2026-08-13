@@ -9,6 +9,10 @@ const { spawn } = require("child_process");
 
 const isDev = !app.isPackaged;
 const ENGINE = isDev ? path.join(__dirname, "..") : path.join(process.resourcesPath, "engine");
+// 独立 Node 二进制：Playwright 在 Electron 自带 node(ELECTRON_RUN_AS_NODE)下会卡死，必须用真 node 跑引擎
+const NODE_BIN = isDev
+  ? path.join(__dirname, "vendor", "node")
+  : path.join(process.resourcesPath, "node");
 // 开发时沿用引擎目录（现有 config/登录态）；打包后用系统用户数据目录
 const HOME = isDev ? ENGINE : app.getPath("userData");
 
@@ -45,8 +49,11 @@ let blockerId = null;
 function startMonitor() {
   if (monitorChild) return { ok: true, already: true };
   const out = fs.openSync(LOGFILE, "a");
-  monitorChild = spawn(process.execPath, [path.join(ENGINE, "monitor.js")], {
-    cwd: ENGINE, env: runEnv(), stdio: ["ignore", out, out], detached: true,
+  monitorChild = spawn(NODE_BIN, [path.join(ENGINE, "monitor.js")], {
+    cwd: ENGINE,
+    env: { ...process.env, DYMON_HOME: HOME }, // 真 node，不要 ELECTRON_RUN_AS_NODE
+    stdio: ["ignore", out, out],
+    detached: true,
   });
   monitorChild.on("exit", () => {
     monitorChild = null;

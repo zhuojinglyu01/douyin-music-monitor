@@ -14,3 +14,4 @@ dist/
 # 杂项
 *.log
 .DS_Store
+electron-app/vendor/

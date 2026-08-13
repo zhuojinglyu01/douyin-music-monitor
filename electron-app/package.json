@@ -19,6 +19,10 @@
     "files": ["main.js", "preload.js", "index.html", "renderer.js", "!dist"],
     "extraResources": [
       {
+        "from": "vendor/node",
+        "to": "node"
+      },
+      {
         "from": "..",
         "to": "engine",
         "filter": [
