@@ -51,18 +51,15 @@ function judge(v, prev, now, s) {
   return `${tag}：${hits.join("、")}（${prev.likes} → ${v.likes} 赞）`;
 }
 
-// 每轮开始先像真人一样逛一下首页，给会话“热身”，降低被风控标记的概率
-async function warmup(context) {
-  const p = await context.newPage();
+// 每轮开始先像真人一样逛一下首页，给会话“热身”。复用同一个 page（不开新标签）。
+async function warmup(page) {
   try {
-    await p.goto("https://www.douyin.com/", { waitUntil: "domcontentloaded", timeout: 20000 });
-    await p.waitForTimeout(4000 + Math.random() * 3000);
-    await p.mouse.wheel(0, 1200).catch(() => {});
-    await p.waitForTimeout(2000 + Math.random() * 2000);
+    await page.goto("https://www.douyin.com/", { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.waitForTimeout(4000 + Math.random() * 3000);
+    await page.mouse.wheel(0, 1200).catch(() => {});
+    await page.waitForTimeout(2000 + Math.random() * 2000);
   } catch {
     /* 热身失败不致命 */
-  } finally {
-    await p.close().catch(() => {});
   }
 }
 
@@ -120,7 +117,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 话题监控（发现 + 逐条量）：搜话题只用来【发现】，之后【逐条量】每条在库视频的实时点赞，
 // 这样正在爆的视频一经发现就被咬住、连续测涨幅，不再依赖它复现于搜索。
-async function runHashtags(cfg, context, now) {
+async function runHashtags(cfg, page, now) {
   const tags = cfg.hashtags || [];
   if (!tags.length) return;
   const t = cfg.hashtagSurge?.tiers || {};
@@ -150,7 +147,7 @@ async function runHashtags(cfg, context, now) {
   // 1) 发现：搜话题，新视频入库、已知视频顺手更新一采样
   for (const term of tags) {
     try {
-      const { videos, viaApi } = await scrapeHashtag(context, term, {
+      const { videos, viaApi } = await scrapeHashtag(page, term, {
         debug: process.env.DEBUG === "1",
         recentDays,
       });
@@ -191,7 +188,7 @@ async function runHashtags(cfg, context, now) {
   let measured = 0, miss = 0;
   for (const [id, rec] of toMeasure) {
     try {
-      const r = await measureVideo(context, id, {});
+      const r = await measureVideo(page, id, {});
       if (r && r.likes != null) {
         addSample(rec, r.likes);
         if (r.createTime) rec.createTime = r.createTime;
@@ -239,16 +236,16 @@ async function runHashtags(cfg, context, now) {
   console.log(`话题监控：Rising ${nR} · 预警 ${nA} · Breaking ${nB}｜本轮新推 ${pushes.length} 条`);
 }
 
-async function runOnce(cfg, context) {
+async function runOnce(cfg, page) {
   const snaps = await loadSnapshots();
   const now = Date.now();
   const alerts = [];
 
-  await warmup(context);
+  await warmup(page);
 
   for (const artist of cfg.artists) {
     try {
-      const { videos, viaApi, blocked, nickname } = await scrapeArtist(context, artist, {
+      const { videos, viaApi, blocked, nickname } = await scrapeArtist(page, artist, {
         debug: process.env.DEBUG === "1",
       });
       if (blocked) {
@@ -288,7 +285,7 @@ async function runOnce(cfg, context) {
     console.log(`名单监控：${alerts.length} 条飙升告警，${Object.keys(snaps).length} 条视频在库。`);
   }
 
-  await runHashtags(cfg, context, now);
+  await runHashtags(cfg, page, now);
   console.log("本轮完成。\n");
 }
 
@@ -325,9 +322,19 @@ async function main() {
     console.error("注入登录 cookie 失败:", e.message);
   }
 
+  // 开一个【复用的标签】并把窗口最小化到 Dock；之后所有抓取都复用它导航（不开新标签）→ 全程藏着不弹屏幕
+  const page = await context.newPage();
+  try {
+    const cdp = await context.newCDPSession(page);
+    const { windowId } = await cdp.send("Browser.getWindowForTarget");
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "minimized" } });
+  } catch {
+    /* 最小化失败也不致命 */
+  }
+
   do {
     console.log(`\n=== 扫描 ${new Date().toLocaleString()} ===`);
-    await runOnce(cfg, context);
+    await runOnce(cfg, page);
     if (!ONCE) {
       const min = cfg.pollIntervalMinutes || 30;
       console.log(`💤 ${min} 分钟后下一轮…`);
