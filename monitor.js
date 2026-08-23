@@ -98,19 +98,23 @@ export function metrics(samples, now) {
 const fmtX = (a) => (a == null ? "?" : a === Infinity ? "∞" : a.toFixed(1));
 
 // 分级 → {tier,label,reason} 或 null。tier: 0=Rising 1=预警 2=Breaking
+// 纯绝对量分级:只看 24h 绝对涨赞。Rising < Watch < Breaking。
 export function classify(m, t) {
   if (!m) return null;
   const rG = t.risingGain24h ?? 500,
-    rX = t.risingAccelX ?? 1.5,
-    aG = t.alertGain24h ?? 2000,
-    aX = t.alertAccelX ?? 3,
+    wG = t.watchGain24h ?? t.alertGain24h ?? 2000,
     bG = t.breakingGain24h ?? 5000;
-  if (m.gain24h >= bG) return { tier: 2, label: "🚨 Breaking", reason: `24h +${m.gain24h} 赞` };
-  if (m.gain24h >= aG || (m.accel != null && m.accel >= aX))
-    return { tier: 1, label: "🔥 预警", reason: m.gain24h >= aG ? `24h +${m.gain24h} 赞` : `增速 ${fmtX(m.accel)}× 自身历史` };
-  if (m.gain24h >= rG && m.accel != null && m.accel >= rX)
-    return { tier: 0, label: "📈 Rising", reason: `24h +${m.gain24h} 赞·增速 ${fmtX(m.accel)}×` };
+  const g = m.gain24h;
+  if (g >= bG) return { tier: 2, label: "Breaking" };
+  if (g >= wG) return { tier: 1, label: "Watch" };
+  if (g >= rG) return { tier: 0, label: "Rising" };
   return null;
+}
+
+// 增长文案:满 24h 显示 "24h +N";不足 24h 如实标 "Tracking · 6h +N"
+export function growthLabel(m) {
+  const g = m.gain24h >= 0 ? `+${m.gain24h}` : `${m.gain24h}`;
+  return m.spanH >= 24 ? `24h ${g} 赞` : `Tracking · ${Math.round(m.spanH)}h ${g} 赞`;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -150,6 +154,7 @@ async function runHashtags(cfg, page, now) {
       const { videos, viaApi } = await scrapeHashtag(page, term, {
         debug: process.env.DEBUG === "1",
         recentDays,
+        keywords: cfg.keywords || [],
       });
       if (!viaApi) {
         console.log(`· #${term}: ⚠️ 没抓到搜索接口，跳过`);
@@ -160,7 +165,8 @@ async function runHashtags(cfg, page, now) {
         if (v.likes == null) continue;
         const isNew = !snaps[v.videoId];
         const rec = ensureRec(v.videoId, {
-          title: v.title, author: v.author, followers: v.followers, tags: v.tags, url: v.url, term, createTime: v.createTime,
+          title: v.title, author: v.author, followers: v.followers, tags: v.tags,
+          hit: v.hit || [], url: v.url, term, createTime: v.createTime,
         });
         addSample(rec, v.likes);
         measuredThisPass.add(v.videoId);
@@ -219,7 +225,7 @@ async function runHashtags(cfg, page, now) {
     rec.tierLabel = c.label;
     rising.push({ rec, c, m });
     if (c.tier >= 1 && c.tier > rec.alertedTier) {
-      pushes.push({ rec, c });
+      pushes.push({ rec, c, m });
       rec.alertedTier = c.tier;
     }
   }
@@ -227,22 +233,42 @@ async function runHashtags(cfg, page, now) {
 
   rising.sort((a, b) => b.m.gain24h - a.m.gain24h);
   const risingOut = rising.map((r) => ({
-    tier: r.c.label, gain24h: r.m.gain24h, accel: fmtX(r.m.accel),
-    likes: r.rec.likes, author: r.rec.author, title: r.rec.title, url: r.rec.url,
+    tier: r.c.label,
+    growth: growthLabel(r.m),
+    gain24h: r.m.gain24h,
+    tracking: r.m.spanH < 24,
+    likes: r.rec.likes,
+    author: r.rec.author,
+    title: r.rec.title,
+    hit: (r.rec.hit || []).join(" / "),
+    url: r.rec.url,
   }));
   await writeFile(RISING, JSON.stringify({ updatedAt: new Date(now).toLocaleString(), items: risingOut }, null, 2)).catch(() => {});
 
+  // 推送:达 Watch/Breaking 才推(去重已由 alertedTier 保证:首达或升级才进 pushes)
   for (const p of pushes) {
+    const g = growthLabel(p.m);
+    const hits = (p.rec.hit || []).join(" / ") || "—";
+    const pub = p.rec.createTime ? new Date(p.rec.createTime).toLocaleString() : "?";
+    const why = p.c.tier === 2 ? "爆发式起量,建议马上看" : "明显起量,值得关注";
     await push(
       cfg.push,
       `${p.c.label} — ${p.rec.author || "?"}`,
-      `${p.rec.title}\n${p.c.reason}（当前 ${p.rec.likes} 赞）\n标签：${(p.rec.tags || []).join(" / ")}\n${p.rec.url}`
+      [
+        p.rec.title,
+        `作者：${p.rec.author || "?"}`,
+        `${g}（当前 ${p.rec.likes} 赞）`,
+        `发布：${pub}`,
+        `命中：${hits}`,
+        `理由：${why}`,
+        p.rec.url,
+      ].join("\n")
     );
   }
   const nB = rising.filter((r) => r.c.tier === 2).length;
-  const nA = rising.filter((r) => r.c.tier === 1).length;
+  const nW = rising.filter((r) => r.c.tier === 1).length;
   const nR = rising.filter((r) => r.c.tier === 0).length;
-  console.log(`话题监控：Rising ${nR} · 预警 ${nA} · Breaking ${nB}｜本轮新推 ${pushes.length} 条`);
+  console.log(`话题监控：Rising ${nR} · Watch ${nW} · Breaking ${nB}｜本轮新推 ${pushes.length} 条`);
 }
 
 async function runOnce(cfg, page) {
