@@ -124,7 +124,6 @@ async function runHashtags(cfg, page, now) {
   const recentDays = cfg.hashtagSurge?.recentDays ?? 7;
   const maxAgeMs = recentDays > 0 ? recentDays * 86400000 : Infinity;
   const cap = cfg.hashtagSurge?.watchlistMax ?? 100;
-  const maxFollowers = cfg.hashtagSurge?.maxAuthorFollowers ?? 0; // 作者粉丝上限，0=不限
   const snaps = await loadHashtagSnapshots();
   const measuredThisPass = new Set();
 
@@ -160,7 +159,6 @@ async function runHashtags(cfg, page, now) {
       for (const v of videos) {
         if (v.likes == null) continue;
         const isNew = !snaps[v.videoId];
-        if (isNew && maxFollowers > 0 && v.followers != null && v.followers > maxFollowers) continue; // 明星/大号不入池
         const rec = ensureRec(v.videoId, {
           title: v.title, author: v.author, followers: v.followers, tags: v.tags, url: v.url, term, createTime: v.createTime,
         });
@@ -175,16 +173,24 @@ async function runHashtags(cfg, page, now) {
     await sleep(6000 + Math.random() * 6000);
   }
 
-  // 2) 清理超龄/超容量：先按发布时间新→旧排，超 recentDays 的丢弃，其余进逐条量预算
+  // 2) 清理：超 recentDays 的直接丢；超容量时“老且不涨的”先踢，新视频和还在涨的保住
   for (const [id, r] of Object.entries(snaps)) {
     if (r.createTime != null && now - r.createTime > maxAgeMs) delete snaps[id];
   }
+  const graceMs = 24 * 3600000;  // 新视频保护期：跟踪不足 24h 一律保留，给它起飞的机会
+  const recentMs = 12 * 3600000; // 判“还涨不涨”看最近这个窗口
+  const activity = (rec) => {
+    const s = rec.samples || [];
+    if (!s.length) return Infinity;
+    if (now - (rec.firstSeen ?? s[0].t) < graceMs) return Infinity; // 新视频：保护，不踢
+    return s[s.length - 1].l - likesAt(s, now - recentMs);          // 老视频：按最近涨幅，平的排最后
+  };
   const notMeasured = Object.entries(snaps)
     .filter(([id]) => !measuredThisPass.has(id))
-    .sort((a, b) => (b[1].createTime || 0) - (a[1].createTime || 0));
+    .sort((a, b) => activity(b[1]) - activity(a[1])); // 活跃/新的在前，老且平的在后
   const budget = Math.max(0, cap - measuredThisPass.size);
   const toMeasure = notMeasured.slice(0, budget);
-  for (const [id] of notMeasured.slice(budget)) delete snaps[id]; // 超容量的老视频清出
+  for (const [id] of notMeasured.slice(budget)) delete snaps[id]; // 踢掉排最后的：老且不涨的
 
   // 3) 逐条量：本轮没在搜索出现的在库视频，直接量它自己的实时点赞
   let measured = 0, miss = 0;
@@ -207,7 +213,6 @@ async function runHashtags(cfg, page, now) {
   // 4) 分级 + 推送 + Rising List（遍历整个名单，不再只看本轮搜到的）
   const rising = [], pushes = [];
   for (const [id, rec] of Object.entries(snaps)) {
-    if (maxFollowers > 0 && rec.followers != null && rec.followers > maxFollowers) { delete snaps[id]; continue; } // 踢明星/大号
     const m = metrics(rec.samples, now);
     const c = classify(m, t);
     if (!c) continue;
