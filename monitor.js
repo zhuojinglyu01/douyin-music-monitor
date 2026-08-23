@@ -124,6 +124,7 @@ async function runHashtags(cfg, page, now) {
   const recentDays = cfg.hashtagSurge?.recentDays ?? 7;
   const maxAgeMs = recentDays > 0 ? recentDays * 86400000 : Infinity;
   const cap = cfg.hashtagSurge?.watchlistMax ?? 100;
+  const maxFollowers = cfg.hashtagSurge?.maxAuthorFollowers ?? 0; // 作者粉丝上限，0=不限
   const snaps = await loadHashtagSnapshots();
   const measuredThisPass = new Set();
 
@@ -159,8 +160,9 @@ async function runHashtags(cfg, page, now) {
       for (const v of videos) {
         if (v.likes == null) continue;
         const isNew = !snaps[v.videoId];
+        if (isNew && maxFollowers > 0 && v.followers != null && v.followers > maxFollowers) continue; // 明星/大号不入池
         const rec = ensureRec(v.videoId, {
-          title: v.title, author: v.author, tags: v.tags, url: v.url, term, createTime: v.createTime,
+          title: v.title, author: v.author, followers: v.followers, tags: v.tags, url: v.url, term, createTime: v.createTime,
         });
         addSample(rec, v.likes);
         measuredThisPass.add(v.videoId);
@@ -192,6 +194,7 @@ async function runHashtags(cfg, page, now) {
       if (r && r.likes != null) {
         addSample(rec, r.likes);
         if (r.createTime) rec.createTime = r.createTime;
+        if (r.followers != null) rec.followers = r.followers;
         measured++;
       } else miss++;
     } catch {
@@ -204,6 +207,7 @@ async function runHashtags(cfg, page, now) {
   // 4) 分级 + 推送 + Rising List（遍历整个名单，不再只看本轮搜到的）
   const rising = [], pushes = [];
   for (const [id, rec] of Object.entries(snaps)) {
+    if (maxFollowers > 0 && rec.followers != null && rec.followers > maxFollowers) { delete snaps[id]; continue; } // 踢明星/大号
     const m = metrics(rec.samples, now);
     const c = classify(m, t);
     if (!c) continue;
