@@ -46,9 +46,10 @@
 
   "push": {
     "type": "feed",
-    "//type": "feed=推到『对话流』：命中写 data/alerts-feed.jsonl，由你的 Claude/agent 读取并转达，不发任何外部服务、无需任何 key。其它：none / wecombot / pushdeer / serverchan（需自备 key）。",
+    "//type": "feed=推到『对话流』：命中写 data/alerts-feed.jsonl，由你的 Claude/agent 读取并转达，不发任何外部服务、无需任何 key。其它：wecomapp（企业微信自建应用，不用建群，需 corpid/agentid/secret）/ wecombot（企业微信群机器人 webhook，需建群）/ pushdeer / serverchan。",
     "serverchan": { "sendkey": "" },
     "wecombot": { "webhook": "" },
+    "wecomapp": { "corpid": "", "agentid": "", "secret": "", "touser": "@all" },
     "pushdeer": { "pushkey": "" }
   }
 }
