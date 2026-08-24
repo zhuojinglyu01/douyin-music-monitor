@@ -1,8 +1,11 @@
 {
-  "//": "======= 分享版默认配置：不含任何私密信息 =======",
+  "//": "======= 分享版默认配置：不含任何私密信息。复制成 config.json 再改 =======",
 
   "pollIntervalMinutes": 90,
+  "//pollIntervalMinutes": "每隔多少分钟扫一轮。小号别设太低，20~90 之间稳。",
+
   "headless": false,
+  "//headless": "必须 false：用有头系统 Chrome，无头会被抖音风控识破（搜索返回空）。",
 
   "artists": [],
   "//artists": "话题监控为主，名单可留空。",
@@ -19,29 +22,31 @@
     "华语新歌",
     "唱作人"
   ],
+  "//hashtags": "【搜索词】拿去抖音搜索、用来发现候选视频。词越多单轮越久（每词约 25 秒）。",
+
+  "keywords": [
+    "新歌", "新歌预告", "新歌上线", "新歌首发", "首发", "先行", "抢先听",
+    "原创", "原创歌曲", "原创音乐", "原创新歌", "自创曲", "唱作",
+    "demo", "Demo", "未发行", "未发布", "新单", "新曲", "试听", "预告", "original"
+  ],
+  "//keywords": "【命中词】搜到的视频，只要【标签 或 文案】命中其中任一词就入候选（双路，不只靠标签）。命中的词会写进推送。",
 
   "hashtagSurge": {
     "recentDays": 7,
+    "//recentDays": "只监控近这么多天内发布的视频。设 0 = 不限。",
     "watchlistMax": 100,
+    "//watchlistMax": "观察名单上限。超过按发布时间+涨势智能淘汰（老且不涨的先踢，新的和在涨的保留）。",
     "tiers": {
       "risingGain24h": 500,
-      "risingAccelX": 1.5,
-      "alertGain24h": 2000,
-      "alertAccelX": 3,
+      "watchGain24h": 2000,
       "breakingGain24h": 5000
-    }
-  },
-
-  "surge": {
-    "minLikesPerHour": 500,
-    "minPctGrowth": 30,
-    "newVideoWindowHours": 48,
-    "teaserKeywords": ["新歌", "预告", "首发", "上线", "新单", "demo", "新专", "预售", "先行", "抢先听", "试听"]
+    },
+    "//tiers": "按【24h 绝对涨赞】分级：Rising≥500（只进榜不推）· Watch≥2000（推）· Breaking≥5000（推，重点）。纯绝对量，不看加速。"
   },
 
   "push": {
-    "type": "none",
-    "//type": "填了 Server酱 SendKey 后 App 会自动切到 serverchan。",
+    "type": "feed",
+    "//type": "feed=推到『对话流』：命中写 data/alerts-feed.jsonl，由你的 Claude/agent 读取并转达，不发任何外部服务、无需任何 key。其它：none / wecombot / pushdeer / serverchan（需自备 key）。",
     "serverchan": { "sendkey": "" },
     "wecombot": { "webhook": "" },
     "pushdeer": { "pushkey": "" }
