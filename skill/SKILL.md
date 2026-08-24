@@ -31,6 +31,8 @@ the user's main account.
    git clone https://github.com/zhuojinglyu01/douyin-music-monitor.git ~/douyin-music-monitor
    ```
 2. **装依赖：** `cd ~/douyin-music-monitor && npm install`（装 Playwright）。
+   > 🇨🇳 国内网络：`npm install` 从境外 CDN 拉 Playwright 依赖可能很慢，加个镜像：
+   > `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright npm install`
 3. **建配置：** `cp config.default.json config.json`（`config.json` 已 gitignore，改它不会污染仓库）。
 4. **登录小号：** `node ~/douyin-music-monitor/login.js` → 弹出 Chrome，让用户用**自己的小号**扫码登录，别手动关窗口，成功后登录态自动存本机 `data/profile/`（不进 git）。
 5. **开始跑：** `node ~/douyin-music-monitor/monitor.js`（持续运行，每 90 分钟一轮）。
@@ -98,7 +100,8 @@ else echo "QUIET_OK ageH=$AGE"; fi
 
 ## 坑 / 注意事项
 
-- **必须小号 + 有头系统 Chrome。** 无头会被风控识破，搜索返回空。
+- **必须小号 + 有头系统 Chrome。** 无头会被风控识破，搜索返回空。**只支持 Chromium 家族：Google Chrome（最佳）/ Edge（`channel:"msedge"`）/ Chromium；Safari、Firefox 不行**（Playwright 驱动不了 Safari.app，WebKit/Firefox 内核更易被抖音拦、且读不了 Chrome 的登录态）。
+- **🇨🇳 国内可用、无需翻墙。** Chrome 浏览器本身在国内正常工作，访问抖音不用 VPN（被墙的是 Google 搜索/Gmail 等服务，本工具用不到）。下载 Chrome 若慢就用国内镜像，或直接用 **Edge**（同内核、国内能下）。
 - **「没抓到搜索接口」＝抓取失效。** 两种可能：①短时间跑太多轮被风控标记 → 让号歇几小时或重登；②**抖音改版换了搜索接口地址**（历史上从 `/general/search/single/` 改成过 `/search/item/`）。若重登+歇号仍全灭，去 `lib/scrape.js` 的 `scrapeHashtag` 里更新接口匹配（开一个有头 Chrome 搜一次、在 Network 里找真正返回视频列表的 `/aweme/...` 请求，把路径加进正则）。
 - 用小号、灰色地带、要养号；只在电脑**醒着**时跑（合盖会睡）。想窗口不打扰，monitor.js 已把浏览器移到屏幕外。
 - `config.json` / `data/` 都在 `.gitignore` 里——**登录态和你的配置永远不会进 git**，可以放心把仓库分享出去。
